@@ -6,6 +6,11 @@ print("tapview - ZX Spectrum TAP file viewer v0.1 - (c) 2020 Aki")
 print("Usage: python tapview.py [TAP file]")
 print()
 
+# check if parameter has been provided
+if len(sys.argv) == 1:
+    print("TAP file required!")
+    sys.exit()
+
 # converts to lower case and saves shell argument into FILE var
 FILE = sys.argv[1].lower()
 
@@ -27,7 +32,7 @@ if ".tap" not in FILE:
 def open_file():
     with open(FILE, "rb") as file:
         content = file.read()
-        print("TAP file inspected:", FILE)
+        print("TAP file:", FILE)
         print()
         return content
 
@@ -38,65 +43,68 @@ def search_for_headers(content):
             or content[byte] == 19 and content[byte + 1] == 0 and content[byte + 2] == 0 and content[byte + 3] == 1 \
             or content[byte] == 19 and content[byte + 1] == 0 and content[byte + 2] == 0 and content[byte + 3] == 2 \
             or content[byte] == 19 and content[byte + 1] == 0 and content[byte + 2] == 0 and content[byte + 3] == 3:
-            for i in range(byte, byte + 19):
+            for i in range(byte, byte + 20):
                 header[header_count].append(str(content[i]))
             # print("header=", header)
             header_count += 1
             header.append([])
     return True
 
+def label():
+    print("Nr Name       Type            Start Length  StHex  LenHex  Flag")
+    print("=" * 63)
+
 def parse_single_header(header):
     # something that has to be done (why?????????????? idk)
     header.pop(-1)
-    # header[0].pop(0)
 
     for sub_header in header:
         # show header number
-        print("Header number:", header.index(sub_header))
+        header_idx = header.index(sub_header)
+        if header_idx < 10:
+            header_idx = "0" + str(header_idx)
+        else:
+            header_idx = str(header_idx)
 
-        # convert strings to integers
+        # convert strings (in header) to integers
         for i in range(len(sub_header)):
             sub_header[i] = int(sub_header[i])
 
-        # print("sub_header=", sub_header)
+        # parse header
         for index in range(len(sub_header)):
-            # print("index=", index)
-
-            # flag byte (header)
+            # header flag
             if index == 2:
                 if sub_header[index] == 0:
-                    print("Flag: header")
+                    header_flag = 0
                 if sub_header[index] == 255:
-                    print("Flag: body")
+                    header_flag = 255
+
+            # file name
+            if index == 4:
+                file_name = ""
+                for character in range(4, 14):
+                    file_name += chr(sub_header[character])
 
             # file type
             if index == 3:
                 if sub_header[index] == 0:
-                    print("Type: Program")
+                    type = "Program        "
                 if sub_header[index] == 1:
-                    print("Type: Number array")
+                    type = "Number array   "
                 if sub_header[index] == 2:
-                    print("Type: Character array")
+                    type = "Character array"
                 if sub_header[index] == 3:
-                    print("Type: Bytes")
-
-            # file name
-            if index == 4:
-                print("Filename: ", end="")
-                for character in range(4, 14):
-                    print(chr(sub_header[character]), end="")
+                    type = "Bytes          "
 
             # length of body
             if index == 14:
-                print()
                 highByte = hex(sub_header[index + 1])[2:]
                 lowByte = hex(sub_header[index])[2:]
                 if highByte in hex_numbers:
                     highByte = "0" + highByte
                 if lowByte in hex_numbers:
                     lowByte = "0" + lowByte
-                byteHex = int("0x" + highByte + lowByte, 16)
-                print("Length:", byteHex, " Hex:", hex(byteHex))
+                len_byteHex = int("0x" + highByte + lowByte, 16)
             
             # start address
             if index == 16:
@@ -106,15 +114,29 @@ def parse_single_header(header):
                     highByte = "0" + highByte
                 if lowByte in hex_numbers:
                     lowByte = "0" + lowByte
-                byteHex = int("0x" + highByte + lowByte, 16)
-                print("Start:", byteHex, " Hex:", hex(byteHex))
+                start_byteHex = int("0x" + highByte + lowByte, 16)
                 
-        print()  # insert empty line
+            # body flag
+            if index == 19:
+                if sub_header[index] == 0:
+                    body_flag = 0
+                if sub_header[index] == 128:
+                    body_flag = 128
+
+        # if screen$
+        if start_byteHex == 16384 and len_byteHex == 6912:
+            type = "Screen$        "
+
+        # print zx block line
+        print(header_idx, file_name, type, "{0:{width}}".format(start_byteHex, width=5), " {0:{width}}".format(len_byteHex, width=5), " {0:{width}}".format(str(hex(start_byteHex)), width=6), "{0:{width}}".format(hex(len_byteHex), width=6), "  {0:{width}}".format(header_flag, width=3), end="")
+        print()
 
 if __name__ == '__main__':
     content = open_file()
     if search_for_headers(content) == True:
+        label()
         parse_single_header(header)
     else:
         print("No header found.")
+    print()
     print("Done.")
